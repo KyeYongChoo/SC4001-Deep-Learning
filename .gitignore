@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+.venv/
+venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Data files
+data/
+*.tgz
+*.tar.gz
+*.zip
+
+# Model weights
+*.pth
+*.pt
+*.h5
+*.ckpt
+
+# Results and outputs
+results/
+outputs/
+logs/
