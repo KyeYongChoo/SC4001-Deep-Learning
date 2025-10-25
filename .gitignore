@@ -11,19 +11,5 @@ venv/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Data files
-data/
-*.tgz
-*.tar.gz
-*.zip
-
-# Model weights
-*.pth
-*.pt
-*.h5
-*.ckpt
-
-# Results and outputs
-results/
-outputs/
-logs/
+# Note: Large files tracked with Git LFS
+# *.tgz, *.pth, *.mat are tracked by LFS
