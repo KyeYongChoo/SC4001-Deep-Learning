@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+.venv/
+venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Note: Large files tracked with Git LFS
+# *.tgz, *.pth, *.mat are tracked by LFS
