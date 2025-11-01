@@ -47,13 +47,6 @@ from torchvision import datasets, transforms, models
 
 from tqdm.notebook import tqdm
 
-# Set style for plots
-plt.style.use('seaborn-v0_8-darkgrid')
-sns.set_palette("husl")
-
-print(f"PyTorch Version: {torch.__version__}")
-print(f"TorchVision Version: {torchvision.__version__}")
-
 
 # ## 🔧 Setup and Configuration
 # 
@@ -74,15 +67,10 @@ def set_seed(seed=42):
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-
-set_seed(42)
-print("Seeds set for reproducibility")
+    pl.seed_everything(seed)
 
 # Check device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f"Using device: {device}")
-if torch.cuda.is_available():
-    print(f"GPU: {torch.cuda.get_device_name(0)}")
 
 
 # ## 📊 Dataset Download and Exploration
@@ -133,21 +121,6 @@ val_dataset_raw = datasets.Flowers102(
     download=False  # Already False
 )
 
-# Basic statistics
-print("\n" + "="*50)
-print("DATASET STATISTICS")
-print("="*50)
-print(f"Training samples: {len(train_dataset_raw)}")
-print(f"Validation samples: {len(val_dataset_raw)}")
-print(f"Test samples: {len(test_dataset)}")
-print(f"Number of classes: 102")
-print(f"Samples per class (train): {len(train_dataset_raw)//102:.0f}")
-print(f"Samples per class (val): {len(val_dataset_raw)//102:.0f}")
-
-# Verify image path
-print(f"\nImages location: {os.path.join(data_path, 'jpg')}")
-
-
 # ## 🌸 Visualize Sample Images
 # 
 # Let's look at some random flower samples from our training set to understand what we're working with.
@@ -173,30 +146,6 @@ def visualize_samples(dataset, num_samples=12, title="Sample Images"):
 
     plt.tight_layout()
     plt.show()
-
-visualize_samples(train_dataset_raw, 12, "Training Set Samples")
-
-
-# ## 📐 Analyze Image Dimensions
-# 
-# Understanding the size distribution of our images helps us choose appropriate resize parameters.
-
-# In[6]:
-
-
-# ============================================
-# Analyze Image Dimensions
-# ============================================
-print("Analyzing image dimensions...")
-widths, heights = [], []
-for i in range(min(500, len(train_dataset_raw))):  # Sample 500 images
-    img, _ = train_dataset_raw[i]
-    widths.append(img.size[0])
-    heights.append(img.size[1])
-
-print(f"Width  - Min: {min(widths)}, Max: {max(widths)}, Mean: {np.mean(widths):.1f}")
-print(f"Height - Min: {min(heights)}, Max: {max(heights)}, Mean: {np.mean(heights):.1f}")
-
 
 # ## 🔄 Data Augmentation and DataLoader
 # 
@@ -312,11 +261,11 @@ def get_flowers_dataloaders(batch_size=32, num_workers=4):
     return train_loader, val_loader, test_loader
 
 # Test the dataloader
-train_loader, val_loader, test_loader = get_flowers_dataloaders(batch_size=32)
-print(f"\nDataLoader created successfully!")
-print(f"Train batches: {len(train_loader)}")
-print(f"Val batches: {len(val_loader)}")
-print(f"Test batches: {len(test_loader)}")
+# train_loader, val_loader, test_loader = get_flowers_dataloaders(batch_size=32)
+# print(f"\nDataLoader created successfully!")
+# print(f"Train batches: {len(train_loader)}")
+# print(f"Val batches: {len(val_loader)}")
+# print(f"Test batches: {len(test_loader)}")
 
 
 # ## 🎨 Visualize Augmented Images
@@ -353,7 +302,7 @@ def show_augmented_batch(dataloader):
     plt.tight_layout()
     plt.show()
 
-show_augmented_batch(train_loader)
+# show_augmented_batch(train_loader)
 
 
 # ## 🤖 Baseline Model Definition
@@ -382,7 +331,7 @@ def create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18
         model: PyTorch model ready for training
     """
 
-    print(f"Creating {model_name} model...")
+    # print(f"Creating {model_name} model...")
 
     if model_name == 'resnet18':
         model = models.resnet18(pretrained=pretrained)
@@ -404,19 +353,19 @@ def create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18
 
     num_features = model.fc.in_features
     model.fc = nn.Linear(num_features, num_classes)
+    model.to(device)
 
     # Count parameters
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    print(f"Total parameters: {total_params:,}")
-    print(f"Trainable parameters: {trainable_params:,}")
-
+    # print(f"Total parameters: {total_params:,}")
+    # print(f"Trainable parameters: {trainable_params:,}")
     return model
 
 # Create model
-model = create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18')
-model = model.to(device)
+# model = create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18')
+# model = model.to(device)
 
 
 # ## 🏋️ Training Functions
@@ -470,7 +419,7 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
 
     return running_loss/len(dataloader), 100.*correct/total
 
-def validate(model, dataloader, criterion, device):
+def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
     """Validate the model"""
     model.eval()
     running_loss = 0.0
@@ -478,13 +427,12 @@ def validate(model, dataloader, criterion, device):
     total = 0
 
     with torch.no_grad():
-        # Use regular tqdm if notebook version fails
-        try:
-            from tqdm.notebook import tqdm
+        if (valid_or_test == "valid"):
             pbar = tqdm(dataloader, desc='Validation')
-        except ImportError:
-            from tqdm import tqdm
-            pbar = tqdm(dataloader, desc='Validation')
+        elif (valid_or_test == "test"):
+            pbar = tqdm(dataloader, desc='Test')
+        else:
+            raise Exception("Please enter \"valid\" or \"test\" for argument \"valid_or_test\"")
 
         for images, labels in pbar:
             images, labels = images.to(device), labels.to(device)
@@ -511,34 +459,34 @@ def validate(model, dataloader, criterion, device):
 # Training Configuration
 # ============================================
 # Hyperparameters
-config = {
-    'model_name': 'resnet18',
-    'num_epochs': 30,
-    'batch_size': 32,
-    'learning_rate': 0.001,
-    'weight_decay': 1e-4,
-    'scheduler_step_size': 10,
-    'scheduler_gamma': 0.1
-}
+# config = {
+#     'model_name': 'resnet18',
+#     'num_epochs': 30,
+#     'batch_size': 32,
+#     'learning_rate': 0.001,
+#     'weight_decay': 1e-4,
+#     'scheduler_step_size': 10,
+#     'scheduler_gamma': 0.1
+# }
 
-# Loss and Optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(
-    model.parameters(), 
-    lr=config['learning_rate'],
-    weight_decay=config['weight_decay']
-)
+# # Loss and Optimizer
+# criterion = nn.CrossEntropyLoss()
+# optimizer = optim.Adam(
+#     model.parameters(), 
+#     lr=config['learning_rate'],
+#     weight_decay=config['weight_decay']
+# )
 
-# Learning rate scheduler
-scheduler = optim.lr_scheduler.StepLR(
-    optimizer, 
-    step_size=config['scheduler_step_size'], 
-    gamma=config['scheduler_gamma']
-)
+# # Learning rate scheduler
+# scheduler = optim.lr_scheduler.StepLR(
+#     optimizer, 
+#     step_size=config['scheduler_step_size'], 
+#     gamma=config['scheduler_gamma']
+# )
 
-print("Training Configuration:")
-for key, value in config.items():
-    print(f"  {key}: {value}")
+# print("Training Configuration:")
+# for key, value in config.items():
+#     print(f"  {key}: {value}")
 
 
 # ## 🚀 Training Loop
@@ -554,53 +502,53 @@ for key, value in config.items():
 # Train the Model
 # ============================================
 # Training history
-history = {
-    'train_loss': [],
-    'train_acc': [],
-    'val_loss': [],
-    'val_acc': []
-}
+# history = {
+#     'train_loss': [],
+#     'train_acc': [],
+#     'val_loss': [],
+#     'val_acc': []
+# }
 
-# Best model tracking
-best_val_acc = 0.0
-best_model_state = None
+# # Best model tracking
+# best_val_acc = 0.0
+# best_model_state = None
 
-print("\n" + "="*50)
-print("STARTING TRAINING")
-print("="*50)
+# print("\n" + "="*50)
+# print("STARTING TRAINING")
+# print("="*50)
 
-for epoch in range(config['num_epochs']):
-    print(f"\nEpoch {epoch+1}/{config['num_epochs']}")
-    print(f"Learning Rate: {scheduler.get_last_lr()[0]:.6f}")
+# for epoch in range(config['num_epochs']):
+#     print(f"\nEpoch {epoch+1}/{config['num_epochs']}")
+#     print(f"Learning Rate: {scheduler.get_last_lr()[0]:.6f}")
 
-    # Train
-    train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)
+#     # Train
+#     train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device)
 
-    # Validate
-    val_loss, val_acc = validate(model, val_loader, criterion, device)
+#     # Validate
+#     val_loss, val_acc = validate(model, val_loader, criterion, device)
 
-    # Step scheduler
-    scheduler.step()
+#     # Step scheduler
+#     scheduler.step()
 
-    # Save history
-    history['train_loss'].append(train_loss)
-    history['train_acc'].append(train_acc)
-    history['val_loss'].append(val_loss)
-    history['val_acc'].append(val_acc)
+#     # Save history
+#     history['train_loss'].append(train_loss)
+#     history['train_acc'].append(train_acc)
+#     history['val_loss'].append(val_loss)
+#     history['val_acc'].append(val_acc)
 
-    # Save best model
-    if val_acc > best_val_acc:
-        best_val_acc = val_acc
-        best_model_state = model.state_dict().copy()
-        print(f"  ✓ New best model! Val Acc: {val_acc:.2f}%")
+#     # Save best model
+#     if val_acc > best_val_acc:
+#         best_val_acc = val_acc
+#         best_model_state = model.state_dict().copy()
+#         print(f"  ✓ New best model! Val Acc: {val_acc:.2f}%")
 
-    # Print metrics
-    print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%")
-    print(f"  Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
+#     # Print metrics
+#     print(f"  Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%")
+#     print(f"  Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%")
 
-# Load best model
-model.load_state_dict(best_model_state)
-print(f"\nBest Validation Accuracy: {best_val_acc:.2f}%")
+# # Load best model
+# model.load_state_dict(best_model_state)
+# print(f"\nBest Validation Accuracy: {best_val_acc:.2f}%")
 
 
 # ## 📊 Test Set Evaluation
@@ -613,13 +561,13 @@ print(f"\nBest Validation Accuracy: {best_val_acc:.2f}%")
 # ============================================
 # Evaluate on Test Set
 # ============================================
-print("\n" + "="*50)
-print("EVALUATING ON TEST SET")
-print("="*50)
+# print("\n" + "="*50)
+# print("EVALUATING ON TEST SET")
+# print("="*50)
 
-test_loss, test_acc = validate(model, test_loader, criterion, device)
-print(f"Test Loss: {test_loss:.4f}")
-print(f"Test Accuracy: {test_acc:.2f}%")
+# test_loss, test_acc = validate(model, test_loader, criterion, device)
+# print(f"Test Loss: {test_loss:.4f}")
+# print(f"Test Accuracy: {test_acc:.2f}%")
 
 
 # ## 📈 Visualize Training History
@@ -632,28 +580,28 @@ print(f"Test Accuracy: {test_acc:.2f}%")
 # ============================================
 # Plot Training History
 # ============================================
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+# fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
 
-# Loss plot
-ax1.plot(history['train_loss'], label='Train Loss', linewidth=2)
-ax1.plot(history['val_loss'], label='Val Loss', linewidth=2)
-ax1.set_xlabel('Epoch', fontsize=12)
-ax1.set_ylabel('Loss', fontsize=12)
-ax1.set_title('Training and Validation Loss', fontsize=14, fontweight='bold')
-ax1.legend()
-ax1.grid(True, alpha=0.3)
+# # Loss plot
+# ax1.plot(history['train_loss'], label='Train Loss', linewidth=2)
+# ax1.plot(history['val_loss'], label='Val Loss', linewidth=2)
+# ax1.set_xlabel('Epoch', fontsize=12)
+# ax1.set_ylabel('Loss', fontsize=12)
+# ax1.set_title('Training and Validation Loss', fontsize=14, fontweight='bold')
+# ax1.legend()
+# ax1.grid(True, alpha=0.3)
 
-# Accuracy plot
-ax2.plot(history['train_acc'], label='Train Acc', linewidth=2)
-ax2.plot(history['val_acc'], label='Val Acc', linewidth=2)
-ax2.set_xlabel('Epoch', fontsize=12)
-ax2.set_ylabel('Accuracy (%)', fontsize=12)
-ax2.set_title('Training and Validation Accuracy', fontsize=14, fontweight='bold')
-ax2.legend()
-ax2.grid(True, alpha=0.3)
+# # Accuracy plot
+# ax2.plot(history['train_acc'], label='Train Acc', linewidth=2)
+# ax2.plot(history['val_acc'], label='Val Acc', linewidth=2)
+# ax2.set_xlabel('Epoch', fontsize=12)
+# ax2.set_ylabel('Accuracy (%)', fontsize=12)
+# ax2.set_title('Training and Validation Accuracy', fontsize=14, fontweight='bold')
+# ax2.legend()
+# ax2.grid(True, alpha=0.3)
 
-plt.tight_layout()
-plt.show()
+# plt.tight_layout()
+# plt.show()
 
 
 # ## 💾 Save Model and Results
@@ -663,25 +611,25 @@ plt.show()
 # In[15]:
 
 
-# Save model weights
-os.makedirs('results/model_weights', exist_ok=True)
-model_path = 'results/model_weights/resnet18_baseline.pth'
-torch.save(best_model_state, model_path)
-print(f"✓ Model weights saved to {model_path}")
+# # Save model weights
+# os.makedirs('results/model_weights', exist_ok=True)
+# model_path = 'results/model_weights/resnet18_baseline.pth'
+# torch.save(best_model_state, model_path)
+# print(f"✓ Model weights saved to {model_path}")
 
-# Save training metrics
-results = {
-    'model': 'ResNet18',
-    'test_accuracy': float(test_acc),
-    'best_val_accuracy': float(best_val_acc),
-    'total_parameters': sum(p.numel() for p in model.parameters()),
-    'history': history
-}
+# # Save training metrics
+# results = {
+#     'model': 'ResNet18',
+#     'test_accuracy': float(test_acc),
+#     'best_val_accuracy': float(best_val_acc),
+#     'total_parameters': sum(p.numel() for p in model.parameters()),
+#     'history': history
+# }
 
-with open('results/metrics.json', 'w') as f:
-    json.dump(results, f, indent=4)
+# with open('results/metrics.json', 'w') as f:
+#     json.dump(results, f, indent=4)
 
-print(f"✓ Metrics saved to results/metrics.json")
+# print(f"✓ Metrics saved to results/metrics.json")
 
 
 # -------
