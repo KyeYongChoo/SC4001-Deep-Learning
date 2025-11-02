@@ -8,6 +8,12 @@ env/
 .venv/
 venv/
 
+# These .safetensors are too large to store in Github without Git Large File Storage
+original_weights\vit_base_patch16_224.safetensors
+original_weights\vit_base_patch32_224.safetensors
+original_weights\resnet152.safetensors
+original_weights\resnet101.safetensors
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
