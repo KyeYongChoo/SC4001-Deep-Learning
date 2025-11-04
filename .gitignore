@@ -17,5 +17,8 @@ original_weights\resnet101.safetensors
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Automatically open venv in terminal
+activate_project.sh
+
 # Note: Large files tracked with Git LFS
 # *.tgz, *.pth, *.mat are tracked by LFS

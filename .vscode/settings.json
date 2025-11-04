@@ -1,0 +1,18 @@
+{
+    "python.pythonPath": "venv\\Scripts\\python.exe",
+    "jupyter.defaultKernel": "Python (SC4001_Group_Assignment_kernel)",
+    "python.terminal.activateEnvironment": true,
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "terminal.integrated.profiles.windows": {
+        "Project SC4001 Group Project": {
+            "path": "C:\\Program Files\\Git\\bin\\bash.exe",
+            "args": ["--login", "-i", "-c", "source ./activate_project.sh; exec bash"]
+        }
+    },
+    "terminal.integrated.defaultProfile.windows": "Project SC4001 Group Project",
+    "terminal.integrated.env.windows": {
+        "VIRTUAL_ENV": "venv",
+        "PATH": "venv\\Scripts:${env:PATH}"
+    },
+    "python-envs.pythonProjects": [],
+}
