@@ -109,7 +109,7 @@ print("Loading Flowers102 dataset...")
 test_dataset = datasets.Flowers102(
 	root=data_root, 
 	split='test', 
-	download=False,  # Changed to False
+	download=True,  # Changed to False
 	transform=transforms.ToTensor()
 )
 
@@ -117,13 +117,13 @@ test_dataset = datasets.Flowers102(
 train_dataset_raw = datasets.Flowers102(
 	root=data_root, 
 	split='train', 
-	download=False  # Already False
+	download=True  # Already False
 )
 
 val_dataset_raw = datasets.Flowers102(
 	root=data_root, 
 	split='val', 
-	download=False  # Already False
+	download=True  # Already False
 )
 
 # ## 🌸 Visualize Sample Images
