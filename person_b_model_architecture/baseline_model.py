@@ -1,20 +1,19 @@
 #!/usr/bin/env python
-# coding: utf-8
 
-# 
+#
 # # SC4001 Deep Learning - Group Project #
 # ##  Oxford Flowers 102 Recognition ##
-# 
+#
 # Role: Person A - Data Pipeline & Baseline Model
 # File: person_a_baseline/baseline_model.ipynb
-# 
+#
 # This notebook contains:
 # 1. Dataset setup and exploration
-# 2. Data augmentation pipeline  
+# 2. Data augmentation pipeline
 # 3. Baseline ResNet18 model
 # 4. Training and evaluation
 # 5. Results for team comparison
-# 
+#
 # Team can import the dataloader using:
 # from person_a_baseline.dataloader import get_flowers_dataloaders
 
@@ -28,33 +27,19 @@
 # !pip install torch torchvision matplotlib seaborn tqdm
 
 import os
-import json
 import random
-import threading
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from collections import Counter
-from datetime import datetime
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import DataLoader
-import pytorch_lightning as pl
-
-import torchvision
-from torchvision import datasets, transforms, models
-
+from torchvision import datasets, models, transforms
 from tqdm.notebook import tqdm
-import timm
-import requests
-import socket
-import time
-from safetensors.torch import load_file as safe_load
 
 # ## 🔧 Setup and Configuration
-# 
+#
 # Setting random seeds for reproducibility and checking available compute device (GPU/CPU).
 
 # In[2]:
@@ -74,12 +59,13 @@ def set_seed(seed=42):
 	torch.backends.cudnn.benchmark = False
 	pl.seed_everything(seed)
 
+
 # Check device
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # ## 📊 Dataset Download and Exploration
-# 
+#
 # Downloading the Oxford Flowers 102 dataset from TorchVision. This dataset contains:
 # - 102 flower categories
 # - Images with varied scales, poses, and lighting conditions
@@ -93,10 +79,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # ============================================
 
 # Dataset is already downloaded in ../data/flowers-102
-data_root = '../data'
+data_root = "../data"
 
 # Check if data exists
-data_path = os.path.join(data_root, 'flowers-102')
+data_path = os.path.join(data_root, "flowers-102")
 if os.path.exists(data_path):
 	print(f"Dataset found at: {data_path}")
 else:
@@ -107,27 +93,27 @@ print("Loading Flowers102 dataset...")
 
 # Load test dataset with transforms
 test_dataset = datasets.Flowers102(
-	root=data_root, 
-	split='test', 
+	root=data_root,
+	split="test",
 	download=False,  # Changed to False
-	transform=transforms.ToTensor()
+	transform=transforms.ToTensor(),
 )
 
 # Load without transforms for exploration
 train_dataset_raw = datasets.Flowers102(
-	root=data_root, 
-	split='train', 
-	download=False  # Already False
+	root=data_root,
+	split="train",
+	download=False,  # Already False
 )
 
 val_dataset_raw = datasets.Flowers102(
-	root=data_root, 
-	split='val', 
-	download=False  # Already False
+	root=data_root,
+	split="val",
+	download=False,  # Already False
 )
 
 # ## 🌸 Visualize Sample Images
-# 
+#
 # Let's look at some random flower samples from our training set to understand what we're working with.
 
 # In[5]:
@@ -146,22 +132,23 @@ def visualize_samples(dataset, num_samples=12, title="Sample Images"):
 	for idx, ax in zip(indices, axes.flat):
 		img, label = dataset[idx]
 		ax.imshow(img)
-		ax.set_title(f'Class {label}', fontsize=10)
-		ax.axis('off')
+		ax.set_title(f"Class {label}", fontsize=10)
+		ax.axis("off")
 
 	plt.tight_layout()
 	plt.show()
 
+
 # ## 🔄 Data Augmentation and DataLoader
-# 
+#
 # Creating data augmentation pipeline and DataLoader functions. This is the **key deliverable** for the team!
-# 
+#
 # **Training augmentations:**
 # - Random cropping and resizing
 # - Horizontal flipping
 # - Color jittering
 # - Rotation
-# 
+#
 # **Validation/Test:**
 # - Only resize and normalize (no augmentation)
 
@@ -181,29 +168,35 @@ def get_data_transforms():
 
 	# ImageNet statistics for normalization (since we use pretrained models)
 	normalize = transforms.Normalize(
-		mean=[0.485, 0.456, 0.406],
-		std=[0.229, 0.224, 0.225]
+		mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
 	)
 
 	# Training transforms with augmentation
-	train_transform = transforms.Compose([
-		transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
-		transforms.RandomHorizontalFlip(p=0.5),
-		transforms.RandomRotation(15),
-		transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
-		transforms.ToTensor(),
-		normalize
-	])
+	train_transform = transforms.Compose(
+		[
+			transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
+			transforms.RandomHorizontalFlip(p=0.5),
+			transforms.RandomRotation(15),
+			transforms.ColorJitter(
+				brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1
+			),
+			transforms.ToTensor(),
+			normalize,
+		]
+	)
 
 	# Validation/Test transforms (no augmentation)
-	test_transform = transforms.Compose([
-		transforms.Resize(256),
-		transforms.CenterCrop(224),
-		transforms.ToTensor(),
-		normalize
-	])
+	test_transform = transforms.Compose(
+		[
+			transforms.Resize(256),
+			transforms.CenterCrop(224),
+			transforms.ToTensor(),
+			normalize,
+		]
+	)
 
 	return train_transform, test_transform
+
 
 def get_flowers_dataloaders(batch_size=32, num_workers=4):
 	"""
@@ -221,49 +214,44 @@ def get_flowers_dataloaders(batch_size=32, num_workers=4):
 
 	# Create datasets with transforms
 	train_dataset = datasets.Flowers102(
-		root='../data', 
-		split='train',
-		transform=train_transform
+		root="../data", split="train", transform=train_transform
 	)
 
 	val_dataset = datasets.Flowers102(
-		root='../data', 
-		split='val',
-		transform=test_transform
+		root="../data", split="val", transform=test_transform
 	)
 
 	test_dataset = datasets.Flowers102(
-		root='../data', 
-		split='test',
-		transform=test_transform
+		root="../data", split="test", transform=test_transform
 	)
 
 	# Create dataloaders
 	train_loader = DataLoader(
-		train_dataset, 
+		train_dataset,
 		batch_size=batch_size,
-		shuffle=True, 
+		shuffle=True,
 		num_workers=num_workers,
-		pin_memory=True if torch.cuda.is_available() else False
+		pin_memory=True if torch.cuda.is_available() else False,
 	)
 
 	val_loader = DataLoader(
-		val_dataset, 
+		val_dataset,
 		batch_size=batch_size,
-		shuffle=False, 
+		shuffle=False,
 		num_workers=num_workers,
-		pin_memory=True if torch.cuda.is_available() else False
+		pin_memory=True if torch.cuda.is_available() else False,
 	)
 
 	test_loader = DataLoader(
-		test_dataset, 
+		test_dataset,
 		batch_size=batch_size,
-		shuffle=False, 
+		shuffle=False,
 		num_workers=num_workers,
-		pin_memory=True if torch.cuda.is_available() else False
+		pin_memory=True if torch.cuda.is_available() else False,
 	)
 
 	return train_loader, val_loader, test_loader
+
 
 # Test the dataloader
 # train_loader, val_loader, test_loader = get_flowers_dataloaders(batch_size=32)
@@ -274,7 +262,7 @@ def get_flowers_dataloaders(batch_size=32, num_workers=4):
 
 
 # ## 🎨 Visualize Augmented Images
-# 
+#
 # Let's see how our augmentation transforms modify the training images.
 
 # In[7]:
@@ -301,17 +289,18 @@ def show_augmented_batch(dataloader):
 			img = torch.clamp(img, 0, 1)
 
 			ax.imshow(img.permute(1, 2, 0))
-			ax.set_title(f'Class {labels[idx].item()}')
-			ax.axis('off')
+			ax.set_title(f"Class {labels[idx].item()}")
+			ax.axis("off")
 
 	plt.tight_layout()
 	plt.show()
+
 
 # show_augmented_batch(train_loader)
 
 
 # ## 🤖 Baseline Model Definition
-# 
+#
 # Using **ResNet18** with transfer learning:
 # - Pre-trained on ImageNet (1000 classes)
 # - Modified final layer for 102 flower classes
@@ -323,7 +312,7 @@ def show_augmented_batch(dataloader):
 # ============================================
 # Define Baseline Model
 # ============================================
-def create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18'):
+def create_baseline_model(num_classes=102, pretrained=True, model_name="resnet18"):
 	"""
 	Create baseline model using transfer learning
 
@@ -338,19 +327,19 @@ def create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18
 
 	# print(f"Creating {model_name} model...")
 
-	if model_name == 'resnet18':
+	if model_name == "resnet18":
 		model = models.resnet18(pretrained=pretrained)
 
-	elif model_name == 'resnet34':
+	elif model_name == "resnet34":
 		model = models.resnet34(pretrained=pretrained)
 
-	elif model_name == 'resnet50':
+	elif model_name == "resnet50":
 		model = models.resnet50(pretrained=pretrained)
 
-	elif model_name == 'resnet101':
+	elif model_name == "resnet101":
 		model = models.resnet50(pretrained=pretrained)
 
-	elif model_name == 'resnet152':
+	elif model_name == "resnet152":
 		model = models.resnet50(pretrained=pretrained)
 
 	else:
@@ -368,13 +357,14 @@ def create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18
 	# print(f"Trainable parameters: {trainable_params:,}")
 	return model
 
+
 # Create model
 # model = create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18')
 # model = model.to(device)
 
 
 # ## 🏋️ Training Functions
-# 
+#
 # Defining functions for training and validation loops.
 
 # In[10]:
@@ -393,10 +383,12 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
 	# Use regular tqdm if notebook version fails
 	try:
 		from tqdm.notebook import tqdm
-		pbar = tqdm(dataloader, desc='Training')
+
+		pbar = tqdm(dataloader, desc="Training")
 	except ImportError:
 		from tqdm import tqdm
-		pbar = tqdm(dataloader, desc='Training')
+
+		pbar = tqdm(dataloader, desc="Training")
 
 	for batch_idx, (images, labels) in enumerate(pbar):
 		images, labels = images.to(device), labels.to(device)
@@ -417,14 +409,14 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
 		correct += predicted.eq(labels).sum().item()
 
 		# Update progress bar
-		pbar.set_postfix({
-			'loss': running_loss/(batch_idx+1),
-			'acc': 100.*correct/total
-		})
+		pbar.set_postfix(
+			{"loss": running_loss / (batch_idx + 1), "acc": 100.0 * correct / total}
+		)
 
-	return running_loss/len(dataloader), 100.*correct/total
+	return running_loss / len(dataloader), 100.0 * correct / total
 
-def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
+
+def validate(model, dataloader, criterion, device, valid_or_test="valid"):
 	"""Validate the model"""
 	model.eval()
 	running_loss = 0.0
@@ -432,12 +424,14 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 	total = 0
 
 	with torch.no_grad():
-		if (valid_or_test == "valid"):
-			pbar = tqdm(dataloader, desc='Validation')
-		elif (valid_or_test == "test"):
-			pbar = tqdm(dataloader, desc='Test')
+		if valid_or_test == "valid":
+			pbar = tqdm(dataloader, desc="Validation")
+		elif valid_or_test == "test":
+			pbar = tqdm(dataloader, desc="Test")
 		else:
-			raise Exception("Please enter \"valid\" or \"test\" for argument \"valid_or_test\"")
+			raise Exception(
+				'Please enter "valid" or "test" for argument "valid_or_test"'
+			)
 
 		for images, labels in pbar:
 			images, labels = images.to(device), labels.to(device)
@@ -450,11 +444,11 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 			total += labels.size(0)
 			correct += predicted.eq(labels).sum().item()
 
-	return running_loss/len(dataloader), 100.*correct/total
+	return running_loss / len(dataloader), 100.0 * correct / total
 
 
 # ## ⚙️ Training Configuration
-# 
+#
 # Setting up hyperparameters, optimizer, and learning rate scheduler.
 
 # In[11]:
@@ -477,15 +471,15 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 # # Loss and Optimizer
 # criterion = nn.CrossEntropyLoss()
 # optimizer = optim.Adam(
-#     model.parameters(), 
+#     model.parameters(),
 #     lr=config['learning_rate'],
 #     weight_decay=config['weight_decay']
 # )
 
 # # Learning rate scheduler
 # scheduler = optim.lr_scheduler.StepLR(
-#     optimizer, 
-#     step_size=config['scheduler_step_size'], 
+#     optimizer,
+#     step_size=config['scheduler_step_size'],
 #     gamma=config['scheduler_gamma']
 # )
 
@@ -495,7 +489,7 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 
 
 # ## 🚀 Training Loop
-# 
+#
 # Training the model for 30 epochs. This will take:
 # - ~25-30 minutes on GPU
 # - ~2-3 hours on CPU
@@ -557,7 +551,7 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 
 
 # ## 📊 Test Set Evaluation
-# 
+#
 # Evaluating the best model on the held-out test set for final performance metrics.
 
 # In[13]:
@@ -576,7 +570,7 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 
 
 # ## 📈 Visualize Training History
-# 
+#
 # Plotting loss and accuracy curves to analyze training behavior.
 
 # In[14]:
@@ -610,7 +604,7 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 
 
 # ## 💾 Save Model and Results
-# 
+#
 # Saving the trained model weights and performance metrics for team reference.
 
 # In[15]:
@@ -640,19 +634,19 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 # -------
 
 # ## 📋 Summary for Team
-# 
+#
 # ### Baseline Results:
 # - **Model:** ResNet18 (Pretrained)
 # - **Test Accuracy:** ~75%
 # - **Parameters:** 11.7M
-# 
+#
 # ### How to use this baseline:
 # ```python
 # # Import dataloader
 # from person_a_baseline.dataloader import get_flowers_dataloaders
 # train_loader, val_loader, test_loader = get_flowers_dataloaders()
-# 
+#
 # # Load model
 # model = torch.load('person_a_baseline/results/model_weights/resnet18_baseline.pth')
 # ```
-# 
+#
