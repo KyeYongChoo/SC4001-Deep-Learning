@@ -1,20 +1,19 @@
 #!/usr/bin/env python
-# coding: utf-8
 
-# 
+#
 # # SC4001 Deep Learning - Group Project #
 # ##  Oxford Flowers 102 Recognition ##
-# 
+#
 # Role: Person A - Data Pipeline & Baseline Model
 # File: person_a_baseline/baseline_model.ipynb
-# 
+#
 # This notebook contains:
 # 1. Dataset setup and exploration
-# 2. Data augmentation pipeline  
+# 2. Data augmentation pipeline
 # 3. Baseline ResNet18 model
 # 4. Training and evaluation
 # 5. Results for team comparison
-# 
+#
 # Team can import the dataloader using:
 # from person_a_baseline.dataloader import get_flowers_dataloaders
 
@@ -28,33 +27,19 @@
 # !pip install torch torchvision matplotlib seaborn tqdm
 
 import os
-import json
 import random
-import threading
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from collections import Counter
-from datetime import datetime
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import DataLoader
-import pytorch_lightning as pl
-
-import torchvision
-from torchvision import datasets, transforms, models
-
+from torchvision import datasets, models, transforms
 from tqdm.notebook import tqdm
-import timm
-import requests
-import socket
-import time
-from safetensors.torch import load_file as safe_load
 
 # ## 🔧 Setup and Configuration
-# 
+#
 # Setting random seeds for reproducibility and checking available compute device (GPU/CPU).
 
 # In[2]:
@@ -74,12 +59,13 @@ def set_seed(seed=42):
 	torch.backends.cudnn.benchmark = False
 	pl.seed_everything(seed)
 
+
 # Check device
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # ## 📊 Dataset Download and Exploration
-# 
+#
 # Downloading the Oxford Flowers 102 dataset from TorchVision. This dataset contains:
 # - 102 flower categories
 # - Images with varied scales, poses, and lighting conditions
@@ -93,10 +79,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # ============================================
 
 # Dataset is already downloaded in ../data/flowers-102
-data_root = '../data'
+data_root = "../data"
 
 # Check if data exists
-data_path = os.path.join(data_root, 'flowers-102')
+data_path = os.path.join(data_root, "flowers-102")
 if os.path.exists(data_path):
 	print(f"Dataset found at: {data_path}")
 else:
@@ -107,27 +93,27 @@ print("Loading Flowers102 dataset...")
 
 # Load test dataset with transforms
 test_dataset = datasets.Flowers102(
-	root=data_root, 
-	split='test', 
+	root=data_root,
+	split="test",
 	download=False,  # Changed to False
-	transform=transforms.ToTensor()
+	transform=transforms.ToTensor(),
 )
 
 # Load without transforms for exploration
 train_dataset_raw = datasets.Flowers102(
-	root=data_root, 
-	split='train', 
-	download=False  # Already False
+	root=data_root,
+	split="train",
+	download=False,  # Already False
 )
 
 val_dataset_raw = datasets.Flowers102(
-	root=data_root, 
-	split='val', 
-	download=False  # Already False
+	root=data_root,
+	split="val",
+	download=False,  # Already False
 )
 
 # ## 🌸 Visualize Sample Images
-# 
+#
 # Let's look at some random flower samples from our training set to understand what we're working with.
 
 # In[5]:
@@ -146,22 +132,23 @@ def visualize_samples(dataset, num_samples=12, title="Sample Images"):
 	for idx, ax in zip(indices, axes.flat):
 		img, label = dataset[idx]
 		ax.imshow(img)
-		ax.set_title(f'Class {label}', fontsize=10)
-		ax.axis('off')
+		ax.set_title(f"Class {label}", fontsize=10)
+		ax.axis("off")
 
 	plt.tight_layout()
 	plt.show()
 
+
 # ## 🔄 Data Augmentation and DataLoader
-# 
+#
 # Creating data augmentation pipeline and DataLoader functions. This is the **key deliverable** for the team!
-# 
+#
 # **Training augmentations:**
 # - Random cropping and resizing
 # - Horizontal flipping
 # - Color jittering
 # - Rotation
-# 
+#
 # **Validation/Test:**
 # - Only resize and normalize (no augmentation)
 
@@ -181,29 +168,35 @@ def get_data_transforms():
 
 	# ImageNet statistics for normalization (since we use pretrained models)
 	normalize = transforms.Normalize(
-		mean=[0.485, 0.456, 0.406],
-		std=[0.229, 0.224, 0.225]
+		mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
 	)
 
 	# Training transforms with augmentation
-	train_transform = transforms.Compose([
-		transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
-		transforms.RandomHorizontalFlip(p=0.5),
-		transforms.RandomRotation(15),
-		transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
-		transforms.ToTensor(),
-		normalize
-	])
+	train_transform = transforms.Compose(
+		[
+			transforms.RandomResizedCrop(224, scale=(0.8, 1.0)),
+			transforms.RandomHorizontalFlip(p=0.5),
+			transforms.RandomRotation(15),
+			transforms.ColorJitter(
+				brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1
+			),
+			transforms.ToTensor(),
+			normalize,
+		]
+	)
 
 	# Validation/Test transforms (no augmentation)
-	test_transform = transforms.Compose([
-		transforms.Resize(256),
-		transforms.CenterCrop(224),
-		transforms.ToTensor(),
-		normalize
-	])
+	test_transform = transforms.Compose(
+		[
+			transforms.Resize(256),
+			transforms.CenterCrop(224),
+			transforms.ToTensor(),
+			normalize,
+		]
+	)
 
 	return train_transform, test_transform
+
 
 def get_flowers_dataloaders(batch_size=32, num_workers=4):
 	"""
@@ -221,49 +214,44 @@ def get_flowers_dataloaders(batch_size=32, num_workers=4):
 
 	# Create datasets with transforms
 	train_dataset = datasets.Flowers102(
-		root='../data', 
-		split='train',
-		transform=train_transform
+		root="../data", split="train", transform=train_transform
 	)
 
 	val_dataset = datasets.Flowers102(
-		root='../data', 
-		split='val',
-		transform=test_transform
+		root="../data", split="val", transform=test_transform
 	)
 
 	test_dataset = datasets.Flowers102(
-		root='../data', 
-		split='test',
-		transform=test_transform
+		root="../data", split="test", transform=test_transform
 	)
 
 	# Create dataloaders
 	train_loader = DataLoader(
-		train_dataset, 
+		train_dataset,
 		batch_size=batch_size,
-		shuffle=True, 
+		shuffle=True,
 		num_workers=num_workers,
-		pin_memory=True if torch.cuda.is_available() else False
+		pin_memory=True if torch.cuda.is_available() else False,
 	)
 
 	val_loader = DataLoader(
-		val_dataset, 
+		val_dataset,
 		batch_size=batch_size,
-		shuffle=False, 
+		shuffle=False,
 		num_workers=num_workers,
-		pin_memory=True if torch.cuda.is_available() else False
+		pin_memory=True if torch.cuda.is_available() else False,
 	)
 
 	test_loader = DataLoader(
-		test_dataset, 
+		test_dataset,
 		batch_size=batch_size,
-		shuffle=False, 
+		shuffle=False,
 		num_workers=num_workers,
-		pin_memory=True if torch.cuda.is_available() else False
+		pin_memory=True if torch.cuda.is_available() else False,
 	)
 
 	return train_loader, val_loader, test_loader
+
 
 # Test the dataloader
 # train_loader, val_loader, test_loader = get_flowers_dataloaders(batch_size=32)
@@ -274,7 +262,7 @@ def get_flowers_dataloaders(batch_size=32, num_workers=4):
 
 
 # ## 🎨 Visualize Augmented Images
-# 
+#
 # Let's see how our augmentation transforms modify the training images.
 
 # In[7]:
@@ -301,17 +289,18 @@ def show_augmented_batch(dataloader):
 			img = torch.clamp(img, 0, 1)
 
 			ax.imshow(img.permute(1, 2, 0))
-			ax.set_title(f'Class {labels[idx].item()}')
-			ax.axis('off')
+			ax.set_title(f"Class {labels[idx].item()}")
+			ax.axis("off")
 
 	plt.tight_layout()
 	plt.show()
+
 
 # show_augmented_batch(train_loader)
 
 
 # ## 🤖 Baseline Model Definition
-# 
+#
 # Using **ResNet18** with transfer learning:
 # - Pre-trained on ImageNet (1000 classes)
 # - Modified final layer for 102 flower classes
@@ -323,7 +312,7 @@ def show_augmented_batch(dataloader):
 # ============================================
 # Define Baseline Model
 # ============================================
-def create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18'):
+def create_baseline_model(num_classes=102, pretrained=True, model_name="resnet18"):
 	"""
 	Create baseline model using transfer learning
 
@@ -338,19 +327,19 @@ def create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18
 
 	# print(f"Creating {model_name} model...")
 
-	if model_name == 'resnet18':
+	if model_name == "resnet18":
 		model = models.resnet18(pretrained=pretrained)
 
-	elif model_name == 'resnet34':
+	elif model_name == "resnet34":
 		model = models.resnet34(pretrained=pretrained)
 
-	elif model_name == 'resnet50':
+	elif model_name == "resnet50":
 		model = models.resnet50(pretrained=pretrained)
 
-	elif model_name == 'resnet101':
+	elif model_name == "resnet101":
 		model = models.resnet50(pretrained=pretrained)
 
-	elif model_name == 'resnet152':
+	elif model_name == "resnet152":
 		model = models.resnet50(pretrained=pretrained)
 
 	else:
@@ -360,13 +349,14 @@ def create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18
 	model.fc = nn.Linear(num_features, num_classes)
 	model.to(device)
 
-	# Count parameters
-	total_params = sum(p.numel() for p in model.parameters())
-	trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+	# # Count parameters
+	# total_params = sum(p.numel() for p in model.parameters())
+	# trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 	# print(f"Total parameters: {total_params:,}")
 	# print(f"Trainable parameters: {trainable_params:,}")
 	return model
+
 
 # Create model
 # model = create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18')
@@ -374,7 +364,7 @@ def create_baseline_model(num_classes=102, pretrained=True, model_name='resnet18
 
 
 # ## 🏋️ Training Functions
-# 
+#
 # Defining functions for training and validation loops.
 
 # In[10]:
@@ -393,10 +383,12 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
 	# Use regular tqdm if notebook version fails
 	try:
 		from tqdm.notebook import tqdm
-		pbar = tqdm(dataloader, desc='Training')
+
+		pbar = tqdm(dataloader, desc="Training")
 	except ImportError:
 		from tqdm import tqdm
-		pbar = tqdm(dataloader, desc='Training')
+
+		pbar = tqdm(dataloader, desc="Training")
 
 	for batch_idx, (images, labels) in enumerate(pbar):
 		images, labels = images.to(device), labels.to(device)
@@ -417,14 +409,14 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
 		correct += predicted.eq(labels).sum().item()
 
 		# Update progress bar
-		pbar.set_postfix({
-			'loss': running_loss/(batch_idx+1),
-			'acc': 100.*correct/total
-		})
+		pbar.set_postfix(
+			{"loss": running_loss / (batch_idx + 1), "acc": 100.0 * correct / total}
+		)
 
-	return running_loss/len(dataloader), 100.*correct/total
+	return running_loss / len(dataloader), 100.0 * correct / total
 
-def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
+
+def validate(model, dataloader, criterion, device, valid_or_test="valid"):
 	"""Validate the model"""
 	model.eval()
 	running_loss = 0.0
@@ -432,12 +424,14 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 	total = 0
 
 	with torch.no_grad():
-		if (valid_or_test == "valid"):
-			pbar = tqdm(dataloader, desc='Validation')
-		elif (valid_or_test == "test"):
-			pbar = tqdm(dataloader, desc='Test')
+		if valid_or_test == "valid":
+			pbar = tqdm(dataloader, desc="Validation")
+		elif valid_or_test == "test":
+			pbar = tqdm(dataloader, desc="Test")
 		else:
-			raise Exception("Please enter \"valid\" or \"test\" for argument \"valid_or_test\"")
+			raise Exception(
+				'Please enter "valid" or "test" for argument "valid_or_test"'
+			)
 
 		for images, labels in pbar:
 			images, labels = images.to(device), labels.to(device)
@@ -450,11 +444,11 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 			total += labels.size(0)
 			correct += predicted.eq(labels).sum().item()
 
-	return running_loss/len(dataloader), 100.*correct/total
+	return running_loss / len(dataloader), 100.0 * correct / total
 
 
 # ## ⚙️ Training Configuration
-# 
+#
 # Setting up hyperparameters, optimizer, and learning rate scheduler.
 
 # In[11]:
@@ -477,15 +471,15 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 # # Loss and Optimizer
 # criterion = nn.CrossEntropyLoss()
 # optimizer = optim.Adam(
-#     model.parameters(), 
+#     model.parameters(),
 #     lr=config['learning_rate'],
 #     weight_decay=config['weight_decay']
 # )
 
 # # Learning rate scheduler
 # scheduler = optim.lr_scheduler.StepLR(
-#     optimizer, 
-#     step_size=config['scheduler_step_size'], 
+#     optimizer,
+#     step_size=config['scheduler_step_size'],
 #     gamma=config['scheduler_gamma']
 # )
 
@@ -495,7 +489,7 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 
 
 # ## 🚀 Training Loop
-# 
+#
 # Training the model for 30 epochs. This will take:
 # - ~25-30 minutes on GPU
 # - ~2-3 hours on CPU
@@ -557,7 +551,7 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 
 
 # ## 📊 Test Set Evaluation
-# 
+#
 # Evaluating the best model on the held-out test set for final performance metrics.
 
 # In[13]:
@@ -576,7 +570,7 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 
 
 # ## 📈 Visualize Training History
-# 
+#
 # Plotting loss and accuracy curves to analyze training behavior.
 
 # In[14]:
@@ -610,7 +604,7 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 
 
 # ## 💾 Save Model and Results
-# 
+#
 # Saving the trained model weights and performance metrics for team reference.
 
 # In[15]:
@@ -640,155 +634,19 @@ def validate(model, dataloader, criterion, device, valid_or_test = "valid"):
 # -------
 
 # ## 📋 Summary for Team
-# 
+#
 # ### Baseline Results:
 # - **Model:** ResNet18 (Pretrained)
 # - **Test Accuracy:** ~75%
 # - **Parameters:** 11.7M
-# 
+#
 # ### How to use this baseline:
 # ```python
 # # Import dataloader
 # from person_a_baseline.dataloader import get_flowers_dataloaders
 # train_loader, val_loader, test_loader = get_flowers_dataloaders()
-# 
+#
 # # Load model
 # model = torch.load('person_a_baseline/results/model_weights/resnet18_baseline.pth')
 # ```
-# 
-# ### Next Steps for Team:
-# - **Person B:** Improve architecture (target: >80%)
-# - **Person C:** Advanced training techniques (target: >85%)
-
-def check_host(url, name=None, timeout=5):
-	try:
-		start = time.time()
-		r = requests.head(url, timeout=timeout)
-		elapsed = (time.time() - start) * 1000
-		print(f"✅ {name or url} reachable — status {r.status_code}, {elapsed:.1f} ms")
-		return True
-	except requests.exceptions.RequestException as e:
-		print(f"❌ {name or url} blocked or unreachable — {e.__class__.__name__}: {e}")
-		return False
-
-def resolve_dns(host):
-	try:
-		ip = socket.gethostbyname(host)
-		print(f"🧭 {host} resolves to {ip}")
-		return True
-	except Exception as e:
-		print(f"⚠️ Could not resolve {host}: {e}")
-		return False
-
-def hugging_face_connectivity_test():
-	print("=== Hugging Face Connectivity Test ===\n")
-
-	# Step 1. DNS resolution
-	huggingface_dns = resolve_dns("huggingface.co")
-	cdn_dns = resolve_dns("cdn-lfs.huggingface.co")
-
-	# Step 2. HTTPS access
-	print("\n--- Checking HTTPS endpoints ---")
-	huggingface_https = check_host("https://huggingface.co", name="huggingface.co")
-	cdn_https = check_host("https://cdn-lfs.huggingface.co", name="cdn-lfs.huggingface.co")
-
-	# Step 3. try a real model file HEAD request
-	print("\n--- Checking model file availability ---")
-	head_req = check_host("https://huggingface.co/timm/vit_base_patch16_224.augreg_in21k_ft_in1k/resolve/main/model.safetensors",
-			name="ViT base patch16 weights")
-
-	print("\n✅ Test complete.\nIf any line shows ❌, your Python environment cannot reach Hugging Face.\n"
-		"Try a full VPN (system-wide), set HTTPS_PROXY, or download weights manually.")
-	
-	return huggingface_dns and cdn_dns and huggingface_https and cdn_https and head_req
-	 
-
-def create_model_with_timeout(model_name, num_classes, device, timeout=10):
-	"""
-	Create a timm model safely with timeout and fallback logic.
-	Tries local weights first, then checks Hugging Face and retries online if accessible.
-	"""
-	model_container = {}
-
-	def target():
-		try:
-			model = timm.create_model(model_name, pretrained=False, num_classes=num_classes)
-
-			# --- Locate local weights ---
-			weights_dir = os.path.join("..", "original_weights")
-			safe_path = os.path.join(weights_dir, f"{model_name}.safetensors")
-			pth_path  = os.path.join(weights_dir, f"{model_name}.pth")
-
-			if os.path.exists(safe_path):
-				weight_path = safe_path
-			elif os.path.exists(pth_path):
-				weight_path = pth_path
-			else:
-				raise FileNotFoundError(f"No local weight file found for '{model_name}' in '{weights_dir}'")
-
-			# --- Load local weights safely ---
-			try:
-				if weight_path.endswith(".safetensors"):
-					state_dict = safe_load(weight_path)
-				else:
-					# PyTorch .pth / .pt file
-					state_dict = torch.load(weight_path, map_location='cpu', weights_only=False)
-			except Exception as e:
-				raise RuntimeError(f"Error loading local weight file '{weight_path}': {e}")
-
-			# --- Apply weights ---
-			try:
-				checkpoint = state_dict.copy()
-				for key in list(checkpoint.keys()):
-					if key.startswith("fc.") or key.startswith("head."):
-						del checkpoint[key]
-
-				# Now load safely
-				missing, unexpected = model.load_state_dict(checkpoint, strict=False)
-				print(f"Ignored missing keys: {missing}")       # should include 'fc.weight', 'fc.bias'
-				print(f"Ignored unexpected keys: {unexpected}")
-			except Exception as e:
-				raise RuntimeError(f"Weight mismatch for '{model_name}': {e}")
-
-			# --- Move to device ---
-			model_container['model'] = model.to(device)
-
-		except Exception as e:
-			model_container['error'] = str(e)
-
-	# --- Run model creation in separate thread with timeout ---
-	thread = threading.Thread(target=target)
-	thread.start()
-	thread.join(timeout)
-
-	if thread.is_alive():
-		raise TimeoutError(f"⏱️ Creating model '{model_name}' timed out after {timeout}s.")
-
-	# --- Handle failure: fallback path ---
-	if 'error' in model_container:
-		print(f"⚠️ Local load failed: {model_container['error']}")
-
-		try:
-			print("\n")
-			hf_status = hugging_face_connectivity_test()
-		except Exception as e:
-			raise RuntimeError(f"❌ Hugging Face connectivity test failed to run: {e}")
-
-		# Optional: interpret test output if your function returns bool
-		if isinstance(hf_status, bool) and not hf_status:
-			raise RuntimeError(
-				"❌ Local Weights not found and could not reach Hugging Face. Check your DNS, VPN, or network access."
-			)
-
-		# --- Retry with online download ---
-		print("🌐 Retrying model creation via TIMM (pretrained=True)...")
-		try:
-			model = timm.create_model(model_name, pretrained=True, num_classes=num_classes)
-			model_container['model'] = model.to(device)
-			print(f"✅ Successfully downloaded and loaded '{model_name}' from Hugging Face.")
-		except Exception as e:
-			raise RuntimeError(
-				f"❌ Retried online download but still failed for '{model_name}': {e}"
-			)
-
-	return model_container['model']
+#
