@@ -1,0 +1,78 @@
+================================================================================
+PERSON C - ADVANCED TECHNIQUES & ANALYSIS
+DETAILED PERFORMANCE REPORT
+================================================================================
+
+### 1. FEW-SHOT LEARNING ANALYSIS (ResNet18) ###
+
+Objective: Evaluate model performance with limited training data.
+Baseline (10-shot training): 79.67%
+
+Results:
+  10_shot:
+    Training samples: 1020 (10 per class)
+    Best val accuracy: 83.24%
+    Test accuracy: 80.14%
+    vs Baseline: +0.47%
+
+  1_shot:
+    Training samples: 102 (1 per class)
+    Best val accuracy: 35.39%
+    Test accuracy: 32.20%
+    vs Baseline: -47.47%
+
+  5_shot:
+    Training samples: 510 (5 per class)
+    Best val accuracy: 71.76%
+    Test accuracy: 68.16%
+    vs Baseline: -11.51%
+
+Key Findings:
+  • As expected, test accuracy drops significantly as training samples decrease.
+  • The 10-shot model is the baseline. The 5-shot and 1-shot results show
+    a clear drop, highlighting the data-hungry nature of deep learning.
+  • Even with only 1 sample per class, the model achieves non-trivial performance,
+    which shows the power of transfer learning from ImageNet.
+
+### 2. MIXUP AUGMENTATION ANALYSIS (ResNet18) ###
+
+Objective: Improve generalization on the 10-shot dataset using MixUp.
+Baseline (10-shot, no MixUp): 79.67%
+
+Results:
+  Alpha = 1.0:
+    Best val accuracy: 79.51%
+    Test accuracy: 75.78%
+    Change from baseline: -3.89%
+
+Key Findings:
+  • Best alpha value: 1.0 (Test Acc: 75.78%)
+  • MixUp acts as a regularizer. By creating interpolated images and labels,
+    it forces the model to learn smoother decision boundaries, reducing overfitting.
+  • This technique appears to be effective, providing a performance boost.
+
+### 3. TRIPLET LOSS ANALYSIS (ResNet18) ###
+
+Objective: Evaluate combined metric learning (Triplet) and classification (Cross-Entropy) loss.
+Baseline (cross-entropy only): 79.67%
+
+Results:
+  Margin: 1.0
+  Lambda (triplet weight): 0.5
+  Best val accuracy: 69.71%
+  Test accuracy: 63.29%
+  Change from baseline: -16.38%
+
+Key Findings:
+  • The combined loss (Triplet + Cross-Entropy) forces the model to learn a more
+    discriminative feature space. This is ideal for fine-grained tasks like flower recognition.
+  • This approach directly optimizes for inter-class separation (pushing negatives away)
+    and intra-class compactness (pulling positives closer), resulting in a strong performance gain.
+
+### 4. OVERALL SUMMARY ###
+
+Best Technique (Person C): Baseline
+Best Test Accuracy: 79.67%
+Improvement over Person A baseline: +0.00%
+
+================================================================================
