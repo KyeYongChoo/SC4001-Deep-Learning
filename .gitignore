@@ -7,6 +7,8 @@ __pycache__/
 env/
 .venv/
 venv/
+mmcv_env/
+.mmcv_env/
 
 # These .safetensors are too large to store in Github without Git Large File Storage
 original_weights\vit_base_patch16_224.safetensors
