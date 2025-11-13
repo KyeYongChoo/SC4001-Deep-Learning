@@ -1,5 +1,6 @@
+# Needs python 3.11 or below
 matplotlib==3.10.7
-numpy==2.3.3 #<-- mmcv wants this, as well as python 11
+numpy==2.3.3 
 # numpy==1.26.4
 pytorch_lightning==2.5.5
 Requests==2.32.5
