@@ -373,24 +373,15 @@ def create_baseline_model(num_classes=102, pretrained=True, model_name="resnet18
 # ============================================
 # Training Functions (Fixed Version)
 # ============================================
-def train_epoch(model, dataloader, criterion, optimizer, device):
+
+def train_epoch(model, dataloader, criterion, optimizer, device, progress_bar=None):
 	"""Train for one epoch"""
 	model.train()
 	running_loss = 0.0
 	correct = 0
 	total = 0
 
-	# Use regular tqdm if notebook version fails
-	try:
-		from tqdm.notebook import tqdm
-
-		pbar = tqdm(dataloader, desc="Training")
-	except ImportError:
-		from tqdm import tqdm
-
-		pbar = tqdm(dataloader, desc="Training")
-
-	for batch_idx, (images, labels) in enumerate(pbar):
+	for batch_idx, (images, labels) in enumerate(dataloader):
 		images, labels = images.to(device), labels.to(device)
 
 		# Forward pass
@@ -409,14 +400,14 @@ def train_epoch(model, dataloader, criterion, optimizer, device):
 		correct += predicted.eq(labels).sum().item()
 
 		# Update progress bar
-		pbar.set_postfix(
-			{"loss": running_loss / (batch_idx + 1), "acc": 100.0 * correct / total}
-		)
+		if progress_bar is not None:
+			progress_bar.update(1)
+			progress_bar.set_postfix({"loss": running_loss / (batch_idx + 1), "acc": 100.0 * correct / total})
 
 	return running_loss / len(dataloader), 100.0 * correct / total
 
 
-def validate(model, dataloader, criterion, device, valid_or_test="valid"):
+def validate(model, dataloader, criterion, device, progress_bar=None):
 	"""Validate the model"""
 	model.eval()
 	running_loss = 0.0
@@ -424,16 +415,7 @@ def validate(model, dataloader, criterion, device, valid_or_test="valid"):
 	total = 0
 
 	with torch.no_grad():
-		if valid_or_test == "valid":
-			pbar = tqdm(dataloader, desc="Validation")
-		elif valid_or_test == "test":
-			pbar = tqdm(dataloader, desc="Test")
-		else:
-			raise Exception(
-				'Please enter "valid" or "test" for argument "valid_or_test"'
-			)
-
-		for images, labels in pbar:
+		for images, labels in dataloader:
 			images, labels = images.to(device), labels.to(device)
 
 			outputs = model(images)
@@ -443,6 +425,9 @@ def validate(model, dataloader, criterion, device, valid_or_test="valid"):
 			_, predicted = outputs.max(1)
 			total += labels.size(0)
 			correct += predicted.eq(labels).sum().item()
+			if progress_bar is not None:
+				progress_bar.update(1)
+				progress_bar.set_postfix({"loss": running_loss / (total / labels.size(0)), "acc": 100.0 * correct / total})
 
 	return running_loss / len(dataloader), 100.0 * correct / total
 
